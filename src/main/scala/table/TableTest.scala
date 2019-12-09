@@ -16,6 +16,8 @@ import org.apache.flink.util.Collector
 object TableTest {
   def main(args: Array[String]): Unit = {
 
+
+
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
     val tableEnv = StreamTableEnvironment.create(env)
@@ -36,18 +38,21 @@ object TableTest {
     })
     tableEnv.registerDataStream("table1", inputDataResult, 'field1, 'field2)
     val table2 = tableEnv.fromDataStream(inputDataResult1, 'field3, 'field4)
-    val projTable = tableEnv.scan("table1").leftOuterJoin(table2).where('field1 === 'field3).select('field1,'field2,'field4)
-//    val sinkTable = projTable.addSink(new SinkFunction[Row] {
-//      override def invoke(value: Row, context: SinkFunction.Context[_]): Unit = {
-//        println(row)
-//      }
-//    })
+
+    val projTable = tableEnv.scan("table1").leftOuterJoin(table2, "field1 = field3").select('field1,'field2,'field4)
 
 
+    val tableEnvResult: DataStream[(Boolean, Row)] = tableEnv.toRetractStream[Row](projTable)
 
-    val result = tableEnv.toAppendStream[Row](projTable).map(new MapFunction[Row, (Long, String, String)](){
-      override def map(t: Row): (Long, String,String) = {
-        (t.getField(0).toString.toLong,t.getField(1).toString, t.getField(2).toString)
+    val result = tableEnvResult.map(new MapFunction[(Boolean,Row), (Long, String, String)](){
+      override def map(t: (Boolean,Row)): (Long, String,String) = {
+        val row = t._2
+        val value3Object = row.getField(2)
+        var value3 = ""
+        if(value3Object != null) {
+          value3 = value3Object.toString
+        }
+        (row.getField(0).toString.toLong,row.getField(1).toString, value3)
       }
     })
 
